@@ -39,3 +39,5 @@ Prometheus datasource (http://prometheus:9090)
 Loki datasource (http://loki:3100)
 
 Rồi import dashboard có sẵn từ Grafana.com (ví dụ: Node Exporter Full, Docker monitoring, Loki log explorer).
+
+import file loki-promtail-views.json vào daskboard để xem log theo container hoặc log của host một cách trực quan
