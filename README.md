@@ -4,6 +4,14 @@ Loki, Promtail → thu thập logs từ host + container.
 
 Grafana → hiển thị tất cả trên dashboard.
 
+để tránh trùng port với các service hoặc các docker khác, có thể thiết lập networks chung có các docker trên: monitoring, và bỏ phần port. Với grafana vẫn sử dụng port 3000 hoặc đổi sang port khác nếu trùng.
+
+- Prometheus chỉ cần truy cập service name trong monitoring network.
+
+Không cần expose port của prometheus, node_exporter, cadvisor ra ngoài host → giảm xung đột port và an toàn hơn.
+
+- Mở Grafana (localhost:3000) rồi add datasource → Prometheus (http://prometheus:9090) và Loki (http://loki:3100).
+
 🚀 Chạy stack
 
 docker compose up -d
