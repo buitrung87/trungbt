@@ -5,6 +5,7 @@ Loki, Promtail → thu thập logs từ host + container.
 Grafana → hiển thị tất cả trên dashboard.
 
 🚀 Chạy stack
+
 docker compose up -d
 
 📊 Truy cập:
