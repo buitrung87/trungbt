@@ -8,6 +8,19 @@ Grafana → hiển thị tất cả trên dashboard.
 docker compose up -d
 
 📊 Truy cập:
+Truy cập http://SERVER_IP:3000
+
+- Đăng nhập (admin/admin, đổi mật khẩu mới)
+
+- Add Data Source → chọn Prometheus → nhập URL: http://prometheus:9090
+
+- Import dashboard có sẵn từ Grafana:
+
+- Node Exporter Full (ID: 1860)
+
+- Docker Container metrics (ID: 193)
+
+- cAdvisor (ID: 14282)
 
 Grafana: http://localhost:3000
  (admin/admin)
