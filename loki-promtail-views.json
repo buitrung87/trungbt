@@ -1,0 +1,109 @@
+{
+  "id": null,
+  "uid": "loki-logs",
+  "title": "Docker & Host Logs via Loki & Promtail",
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 2,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "logs",
+      "title": "Container Logs",
+      "gridPos": {
+        "h": 20,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "dedupStrategy": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{container_name=~\"$container\"}"
+        }
+      ],
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Host Logs (/var/log/*log)",
+      "gridPos": {
+        "h": 20,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "options": {
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "dedupStrategy": "none"
+      },
+      "targets": [
+        {
+          "refId": "B",
+          "expr": "{job=\"varlogs\"}"
+        }
+      ],
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "container",
+        "label": "Container Name",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "query": "label_values(container_name)",
+        "refresh": 2,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": ".+",
+          "value": ".+"
+        },
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": false
+      },
+      {
+        "name": "varlog",
+        "label": "Host Log Files",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "query": "label_values({job=\"varlogs\"}, filename)",
+        "refresh": 2,
+        "sort": 1,
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": false,
+        "current": {
+          "selected": true,
+          "text": ".+",
+          "value": ".+"
+        }
+      }
+    ]
+  }
+}
