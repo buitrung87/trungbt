@@ -1,0 +1,62 @@
+{
+  "id": null,
+  "uid": "host-logs",
+  "title": "Server Logs",
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+       "type": "logs",
+      "title": "Host Logs (/var/log/*log)",
+      "gridPos": {
+        "h": 20,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "options": {
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true,
+        "dedupStrategy": "none"
+      },
+      "targets": [
+        {
+          "refId": "B",
+          "expr": "{job=\"varlogs\"}"
+        }
+      ],
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "varlog",
+        "label": "Host Log Files",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "query": "label_values({job=\"varlogs\"}, filename)",
+        "refresh": 2,
+        "sort": 1,
+        "includeAll": true,
+        "allValue": ".+",
+        "multi": false,
+        "current": {
+          "selected": true,
+          "text": ".+",
+          "value": ".+"
+        }
+      }
+    ]
+  }
+}
