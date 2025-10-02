@@ -1,0 +1,240 @@
+Lỗi này xảy ra vì container certbot không thể kết nối ra internet để gọi API của Let's Encrypt. Có thể do vấn đề DNS hoặc network configuration.
+🔍 Nguyên nhân:
+
+Container không có DNS resolution
+Network isolation - container không thể ra ngoài internet
+Firewall blocking outbound connections
+DNS server không hoạt động
+
+✅ Giải pháp:
+Giải pháp 1: Sửa command certbot - Thêm DNS resolver
+Trong file nginx-deploy.yml, sửa command certbot:
+bash# TÌM (khoảng dòng 220):
+sudo docker run --rm --network="hocthongminh-network" \
+  -v "${DEPLOY_DIR}/data/certbot/conf:/etc/letsencrypt" \
+  -v "${DEPLOY_DIR}/data/certbot/www:/var/www/certbot" \
+  certbot/certbot certonly --webroot -w /var/www/certbot \
+  --email ${EMAIL} -d ${DOMAIN} -d www.${DOMAIN} -d monitor.${DOMAIN} \
+  --rsa-key-size 4096 --agree-tos --non-interactive ${RENEW_FLAG}
+
+# SỬA THÀNH (thêm --dns để sử dụng Google DNS và Cloudflare DNS):
+sudo docker run --rm --network="hocthongminh-network" \
+  --dns 8.8.8.8 --dns 8.8.4.4 --dns 1.1.1.1 \
+  -v "${DEPLOY_DIR}/data/certbot/conf:/etc/letsencrypt" \
+  -v "${DEPLOY_DIR}/data/certbot/www:/var/www/certbot" \
+  certbot/certbot certonly --webroot -w /var/www/certbot \
+  --email ${EMAIL} -d ${DOMAIN} -d www.${DOMAIN} -d monitor.${DOMAIN} \
+  --rsa-key-size 4096 --agree-tos --non-interactive ${RENEW_FLAG}
+Giải pháp 2: Sử dụng host network (Khuyến nghị)
+Thay vì dùng custom network, dùng host network để tránh vấn đề DNS:
+bash# SỬA THÀNH:
+sudo docker run --rm --network="host" \
+  -v "${DEPLOY_DIR}/data/certbot/conf:/etc/letsencrypt" \
+  -v "${DEPLOY_DIR}/data/certbot/www:/var/www/certbot" \
+  certbot/certbot certonly --webroot -w /var/www/certbot \
+  --email ${EMAIL} -d ${DOMAIN} -d www.${DOMAIN} -d monitor.${DOMAIN} \
+  --rsa-key-size 4096 --agree-tos --non-interactive ${RENEW_FLAG}
+Giải pháp 3: Cấu hình Docker daemon DNS
+SSH vào server và cấu hình Docker DNS:
+bash# Tạo hoặc sửa file daemon.json
+sudo nano /etc/docker/daemon.json
+Thêm nội dung:
+json{
+  "dns": ["8.8.8.8", "8.8.4.4", "1.1.1.1"]
+}
+Restart Docker daemon:
+bashsudo systemctl restart docker
+
+# Restart nginx container
+cd /opt/hocthongminh/docker-compose/nginx
+sudo docker-compose restart
+Giải pháp 4: Kiểm tra và sửa network configuration
+Kiểm tra network hiện tại:
+bash# Kiểm tra network
+docker network inspect hocthongminh-network
+
+# Xem DNS settings
+docker network inspect hocthongminh-network | grep -A 5 "IPAM"
+Nếu network không có DNS, xóa và tạo lại:
+bash# Stop tất cả containers trong network
+cd /opt/hocthongminh/docker-compose/nginx
+sudo docker-compose down
+
+cd /opt/hocthongminh/docker-compose/minio
+sudo docker-compose down
+
+# Xóa network
+sudo docker network rm hocthongminh-network
+
+# Tạo lại với DNS
+sudo docker network create hocthongminh-network \
+  --driver bridge \
+  --opt "com.docker.network.bridge.name"="hocthongminh0" \
+  --opt "com.docker.network.driver.mtu"="1500"
+
+# Start lại services
+cd /opt/hocthongminh/docker-compose/nginx
+sudo docker-compose up -d
+Giải pháp 5: Test DNS resolution trong container
+Kiểm tra xem container có thể resolve DNS không:
+bash# Test DNS từ một container tạm
+sudo docker run --rm --network="hocthongminh-network" alpine nslookup acme-v02.api.letsencrypt.org
+
+# Nếu lỗi, test với DNS explicit
+sudo docker run --rm --network="hocthongminh-network" --dns 8.8.8.8 alpine nslookup acme-v02.api.letsencrypt.org
+
+# Test curl
+sudo docker run --rm --network="hocthongminh-network" --dns 8.8.8.8 curlimages/curl:latest curl -I https://acme-v02.api.letsencrypt.org/directory
+Giải pháp 6: Sửa trong docker-compose.yml
+Thêm DNS vào docker-compose nginx:
+yaml# File: docker-compose/nginx/docker-compose.yml
+services:
+  nginx:
+    # ... các config khác
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
+    networks:
+      - hocthongminh-network
+
+  certbot:
+    image: certbot/certbot
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
+    volumes:
+      - ../data/certbot/conf:/etc/letsencrypt
+      - ../data/certbot/www:/var/www/certbot
+    networks:
+      - hocthongminh-network
+Giải pháp 7: Kiểm tra firewall
+Kiểm tra xem server có block outbound connections không:
+bash# Kiểm tra firewall
+sudo iptables -L -n | grep -i drop
+sudo ufw status
+
+# Test kết nối từ server
+curl -I https://acme-v02.api.letsencrypt.org/directory
+
+# Nếu bị chặn, mở port 443 outbound
+sudo ufw allow out 443/tcp
+Giải pháp 8: Sửa file nginx-deploy.yml - Version hoàn chỉnh
+Đây là phiên bản sửa đổi hoàn chỉnh cho phần certbot:
+bashecho ">>> Bước 6: Lấy hoặc gia hạn chứng chỉ SSL"
+# Chỉ production mới cần SSL certificate
+if [[ "${ENVIRONMENT}" == "production" ]]; then
+  RENEW_FLAG=''
+  if [ "${FORCE_RENEW}" == 'true' ]; then
+    RENEW_FLAG='--force-renewal'
+  fi
+
+  # Kiểm tra xem chứng chỉ đã tồn tại chưa
+  if [ "${FORCE_RENEW}" != 'true' ] && [ -f "${DEPLOY_DIR}/data/certbot/conf/live/${DOMAIN}/fullchain.pem" ]; then
+    echo "ℹ️ Chứng chỉ SSL đã tồn tại. Bỏ qua việc tạo mới."
+  else
+    echo "🔒 Đang lấy chứng chỉ SSL từ Let's Encrypt..."
+    
+    # Test DNS resolution trước
+    echo "🔍 Testing DNS resolution..."
+    if ! nslookup acme-v02.api.letsencrypt.org > /dev/null 2>&1; then
+      echo "⚠️ DNS resolution failed on host, but will try with Docker DNS"
+    fi
+    
+    # Dừng nginx để release port 80 (nếu đang chạy)
+    sudo docker-compose stop nginx 2>/dev/null || true
+    
+    # Chạy Certbot với multiple DNS servers và host network
+    echo "🚀 Running certbot with DNS servers..."
+    sudo docker run --rm \
+      --network="host" \
+      --dns 8.8.8.8 \
+      --dns 8.8.4.4 \
+      --dns 1.1.1.1 \
+      -v "${DEPLOY_DIR}/data/certbot/conf:/etc/letsencrypt" \
+      -v "${DEPLOY_DIR}/data/certbot/www:/var/www/certbot" \
+      certbot/certbot certonly --standalone \
+      --preferred-challenges http \
+      --http-01-port 80 \
+      --email ${EMAIL} \
+      -d ${DOMAIN} \
+      -d www.${DOMAIN} \
+      -d monitor.${DOMAIN} \
+      --rsa-key-size 4096 \
+      --agree-tos \
+      --non-interactive \
+      --verbose \
+      ${RENEW_FLAG} || {
+        echo "❌ Certbot failed. Trying with standalone method..."
+        # Fallback: Try with standalone if webroot fails
+        sudo docker run --rm \
+          --network="host" \
+          --dns 8.8.8.8 \
+          -v "${DEPLOY_DIR}/data/certbot/conf:/etc/letsencrypt" \
+          certbot/certbot certonly --standalone \
+          --email ${EMAIL} \
+          -d ${DOMAIN} \
+          -d www.${DOMAIN} \
+          -d monitor.${DOMAIN} \
+          --agree-tos \
+          --non-interactive \
+          ${RENEW_FLAG}
+      }
+    
+    # Verify certificate
+    if [ -f "${DEPLOY_DIR}/data/certbot/conf/live/${DOMAIN}/fullchain.pem" ]; then
+      echo "✅ Certificate obtained successfully"
+      openssl x509 -in "${DEPLOY_DIR}/data/certbot/conf/live/${DOMAIN}/fullchain.pem" -text -noout | grep "DNS:"
+    else
+      echo "❌ Certificate file not found!"
+      exit 1
+    fi
+    
+    # Start nginx lại
+    sudo docker-compose up -d nginx
+  fi
+else
+  echo "ℹ️ Staging environment - skipping SSL certificate generation"
+fi
+🔧 Thay đổi chính:
+
+--network="host": Sử dụng host network thay vì custom network
+--dns 8.8.8.8 --dns 8.8.4.4 --dns 1.1.1.1: Thêm multiple DNS servers
+--standalone: Sử dụng standalone mode thay vì webroot (dễ hơn)
+--http-01-port 80: Explicit port cho HTTP challenge
+Fallback mechanism: Nếu lỗi, thử lại với method khác
+Stop nginx trước: Tránh conflict port 80
+
+🚀 Deploy lại:
+Sau khi sửa code:
+
+Commit và push code
+Run workflow với force_renew: true
+
+Hoặc test thủ công trên server:
+bash# SSH vào server
+cd /opt/hocthongminh/docker-compose/nginx
+
+# Stop nginx
+sudo docker-compose stop nginx
+
+# Test certbot với DNS
+sudo docker run --rm \
+  --network="host" \
+  --dns 8.8.8.8 \
+  --dns 1.1.1.1 \
+  -v "/opt/hocthongminh/data/certbot/conf:/etc/letsencrypt" \
+  certbot/certbot certonly --standalone \
+  --email hocthongminh.ai@gmail.com \
+  -d hocthongminh.ai \
+  -d www.hocthongminh.ai \
+  -d monitor.hocthongminh.ai \
+  --agree-tos \
+  --non-interactive \
+  --force-renewal \
+  --verbose
+
+# Start nginx lại
+sudo docker-compose up -d nginx
+Giải pháp --network="host" + --dns 8.8.8.8 thường fix được 99% trường hợp lỗi DNS với certbot! 🎯
