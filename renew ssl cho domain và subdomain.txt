@@ -1,0 +1,32 @@
+# SSH vào server
+cd /opt/hocthongminh/docker-compose/nginx
+
+# Stop nginx
+sudo docker-compose stop nginx
+
+# Test certbot với DNS
+sudo docker run --rm \
+  --network="host" \
+  --dns 8.8.8.8 \
+  --dns 1.1.1.1 \
+  -v "/opt/hocthongminh/data/certbot/conf:/etc/letsencrypt" \
+  certbot/certbot certonly --standalone \
+  --email hocthongminh.ai@gmail.com \
+  -d hocthongminh.ai \
+  -d www.hocthongminh.ai \
+  -d monitor.hocthongminh.ai \
+  --agree-tos \
+  --non-interactive \
+  --force-renewal \
+  --verbose
+
+# Start nginx lại
+sudo docker-compose up -d nginx
+
+- lệnh check lỗi ssl:
+# Test HTTPS connection
++ curl -I https://monitor.hocthongminh.ai
+# Check certificate details
+echo | openssl s_client -servername monitor.hocthongminh.ai -connect monitor.hocthongminh.ai:443 2>/dev/null | openssl x509 -noout -text | grep DNS:
+
+
