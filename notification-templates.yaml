@@ -1,0 +1,54 @@
+apiVersion: 1
+
+templates:
+  - name: telegram.custom.message
+    template: |
+      {{ define "telegram.custom.message" }}
+      {{- if .Alerts }}
+      {{- range .Alerts }}
+
+      {{/* Emoji selector based on log_level */}}
+      {{- $emoji := "⚠️" -}}
+      {{- if eq (index .Labels "log_level") "panic" -}}
+        {{- $emoji = "💀" -}}
+      {{- else if eq (index .Labels "log_level") "fatal" -}}
+        {{- $emoji = "🔴" -}}
+      {{- else if eq (index .Labels "log_level") "error" -}}
+        {{- $emoji = "⚠️" -}}
+      {{- end }}
+
+      {{- if eq .Status "firing" }}
+      <b>{{ $emoji }} ALERT: {{ index .Labels "alertname" | default "Docker Log Alert" }}</b>
+      {{- else }}
+      <b>✅ RESOLVED: {{ index .Labels "alertname" | default "Docker Log Alert" }}</b>
+      {{- end }}
+
+      📦 <b>Container:</b>
+      <code>{{ index .Labels "container" | default "unknown" }}</code>
+
+      🏷️ <b>Type:</b>
+      <b>{{ index .Labels "log_level" | default "log" | upper }}</b>
+
+      📝 <b>Log Message:</b>
+      <pre>
+      {{- if .Annotations.description -}}
+      {{ .Annotations.description
+         | reReplaceAll "&" "&amp;"
+         | reReplaceAll "<" "&lt;"
+         | reReplaceAll ">" "&gt;"
+      }}
+      {{- else -}}
+      No log content (test alert)
+      {{- end -}}
+      </pre>
+
+      🔗 <a href="https://monitor.hocthongminh.ai/explore">View on Monitor</a>
+
+      {{- end }}
+      {{- else }}
+
+      <b>🚨 DOCKER LOG ALERT (TEST)</b>
+      This is a test alert from Grafana.
+
+      {{- end }}
+      {{ end }}
