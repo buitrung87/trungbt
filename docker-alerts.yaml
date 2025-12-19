@@ -1,179 +1,69 @@
 apiVersion: 1
+
 groups:
   - orgId: 1
-    name: Docker Logs with Content
+    name: Docker Logs Alerts
     folder: Log Alerts
     interval: 1m
+
     rules:
-      # Alert riêng cho từng loại: ERROR, FATAL, PANIC
-      
-      - uid: container-error-logs
-        title: Container ERROR Logs
+      - uid: container-error-fatal-panic
+        title: Container ERROR / FATAL / PANIC Logs
         condition: C
+
         data:
           - refId: A
+            datasourceUid: loki
             relativeTimeRange:
               from: 300
               to: 0
-            datasourceUid: cez4j9dfrb75sc
             model:
-              expr: |
-                sum by (container, log_message) (
-                  count_over_time({container!=""} |~ `(?i)error` | regexp `(?P<log_message>.*)` [5m])
-                )
               queryType: range
-              refId: A
-          
+              expr: |
+                topk by(container_name) (1,
+                  sum by (container_name, log_level, log_message) (
+                    count_over_time(
+                      {container_name!=""}
+                      |~ "(?i)error|fatal|panic"
+                      | regexp "(?P<log_level>error|fatal|panic)"
+                      | regexp "(?P<log_message>.*)"
+                      [5m]
+                    )
+                  )
+                )
+
           - refId: B
             datasourceUid: __expr__
             model:
               type: reduce
-              expression: A
               reducer: last
-              refId: B
-          
+              expression: A
+
           - refId: C
             datasourceUid: __expr__
             model:
               type: threshold
               expression: B
-              refId: C
               conditions:
                 - evaluator:
-                    params: [0]
                     type: gt
+                    params: [0]
         
-        noDataState: NoData
-        execErrState: Alerting
         for: 30s
-        
+        noDataState: OK
+        execErrState: OK
+
         annotations:
-          summary: "⚠️ ERROR logs từ {{ $labels.container }}"
+          summary: "🚨 {{ $labels.log_level | toUpper }} log từ {{ $labels.container_name }}"
           description: "{{ $labels.log_message }}"
-          log_type: "error"
-        
+
         labels:
           severity: warning
           alert_type: docker_logs
-          log_level: error
-        
+
         notification_settings:
           receiver: TELEGRAM_LOG_TOPIC
-          group_by: [container, log_message]
-          group_wait: 30s
-          group_interval: 5m
-          repeat_interval: 4h
-      
-      - uid: container-fatal-logs
-        title: Container FATAL Logs
-        condition: C
-        data:
-          - refId: A
-            relativeTimeRange:
-              from: 300
-              to: 0
-            datasourceUid: cez4j9dfrb75sc
-            model:
-              expr: |
-                sum by (container, log_message) (
-                  count_over_time({container!=""} |~ `(?i)fatal` | regexp `(?P<log_message>.*)` [5m])
-                )
-              queryType: range
-              refId: A
-          
-          - refId: B
-            datasourceUid: __expr__
-            model:
-              type: reduce
-              expression: A
-              reducer: last
-              refId: B
-          
-          - refId: C
-            datasourceUid: __expr__
-            model:
-              type: threshold
-              expression: B
-              refId: C
-              conditions:
-                - evaluator:
-                    params: [0]
-                    type: gt
-        
-        noDataState: NoData
-        execErrState: Alerting
-        for: 30s
-        
-        annotations:
-          summary: "🔴 FATAL logs từ {{ $labels.container }}"
-          description: "{{ $labels.log_message }}"
-          log_type: "fatal"
-        
-        labels:
-          severity: critical
-          alert_type: docker_logs
-          log_level: fatal
-        
-        notification_settings:
-          receiver: TELEGRAM_LOG_TOPIC
-          group_by: [container, log_message]
-          group_wait: 30s
-          group_interval: 5m
-          repeat_interval: 4h
-      
-      - uid: container-panic-logs
-        title: Container PANIC Logs
-        condition: C
-        data:
-          - refId: A
-            relativeTimeRange:
-              from: 300
-              to: 0
-            datasourceUid: cez4j9dfrb75sc
-            model:
-              expr: |
-                sum by (container, log_message) (
-                  count_over_time({container!=""} |~ `(?i)panic` | regexp `(?P<log_message>.*)` [5m])
-                )
-              queryType: range
-              refId: A
-          
-          - refId: B
-            datasourceUid: __expr__
-            model:
-              type: reduce
-              expression: A
-              reducer: last
-              refId: B
-          
-          - refId: C
-            datasourceUid: __expr__
-            model:
-              type: threshold
-              expression: B
-              refId: C
-              conditions:
-                - evaluator:
-                    params: [0]
-                    type: gt
-        
-        noDataState: NoData
-        execErrState: Alerting
-        for: 30s
-        
-        annotations:
-          summary: "💀 PANIC logs từ {{ $labels.container }}"
-          description: "{{ $labels.log_message }}"
-          log_type: "panic"
-        
-        labels:
-          severity: critical
-          alert_type: docker_logs
-          log_level: panic
-        
-        notification_settings:
-          receiver: TELEGRAM_LOG_TOPIC
-          group_by: [container, log_message]
+          group_by: [container_name, log_level]
           group_wait: 30s
           group_interval: 5m
           repeat_interval: 4h
