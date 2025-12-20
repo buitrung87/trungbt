@@ -1,54 +1,62 @@
 apiVersion: 1
 
 templates:
-  - name: telegram.custom.message
+  - orgId: 1
+    name: telegram.custom.message
     template: |
       {{ define "telegram.custom.message" }}
-      {{- if .Alerts }}
-      {{- range .Alerts }}
+      {{- if gt (len .Alerts.Firing) 0 }}
+      {{- range .Alerts.Firing }}
+      {{- $logLevel := or .Labels.log_level "LOG" }}
+      {{- $container := or .Labels.container_name (or .Labels.container "unknown") }}
 
-      {{/* Emoji selector based on log_level */}}
-      {{- $emoji := "⚠️" -}}
-      {{- if eq (index .Labels "log_level") "panic" -}}
-        {{- $emoji = "💀" -}}
-      {{- else if eq (index .Labels "log_level") "fatal" -}}
-        {{- $emoji = "🔴" -}}
-      {{- else if eq (index .Labels "log_level") "error" -}}
-        {{- $emoji = "⚠️" -}}
+      {{- if eq $logLevel "panic" }}💀{{ else if eq $logLevel "fatal" }}🔴{{ else }}⚠️{{ end }} <b>{{ .Labels.alertname }}</b>
+
+      📦 <b>Container:</b> <code>{{ $container }}</code>
+      🏷️ <b>Type:</b> <b>{{ $logLevel }}</b>
+      ⏰ <b>Time:</b> {{ .StartsAt | tz "Asia/Ho_Chi_Minh" | date "02/01/2006 15:04:05 MST" }}
+
+      📝 <b>Message:</b>
+      <pre>{{ or .Annotations.description .Annotations.summary }}</pre>
+
+      🔗 <a href="https://monitor.hocthongminh.ai/explore?orgId=1&left=%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bcontainer_name%3D%5C%22{{ $container }}%5C%22%7D%22%2C%22queryType%22%3A%22range%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D">View Logs</a>
+      ━━━━━━━━━━━━━━━━━━━━
+      {{- end }}
       {{- end }}
 
-      {{- if eq .Status "firing" }}
-      <b>{{ $emoji }} ALERT: {{ index .Labels "alertname" | default "Docker Log Alert" }}</b>
-      {{- else }}
-      <b>✅ RESOLVED: {{ index .Labels "alertname" | default "Docker Log Alert" }}</b>
+      {{- if gt (len .Alerts.Resolved) 0 }}
+      ✅ <b>RESOLVED</b>
+      {{- range .Alerts.Resolved }}
+      • {{ or .Labels.container_name .Labels.container }} - {{ or .Labels.log_level "LOG" }}
+      {{- end }}
+      {{- end }}
+      {{ end }}
+
+  - orgId: 1
+    name: telegram.metric.message
+    template: |
+      {{ define "telegram.metric.message" }}
+      {{- if gt (len .Alerts.Firing) 0 }}
+      {{- range .Alerts.Firing }}
+      {{- $severity := or .Labels.severity "info" }}
+      {{- $metric := or .Labels.metric "N/A" }}
+
+      {{- if eq $severity "critical" }}🔥{{ else if eq $severity "warning" }}⚠️{{ else }}ℹ️{{ end }} <b>{{ .Labels.alertname }}</b>
+
+      💻 <b>Host:</b> <code>{{ or .Labels.instance "unknown" }}</code>
+      📊 <b>Metric:</b> {{ $metric }}
+
+      📝 <b>Details:</b>
+      {{ or .Annotations.description .Annotations.summary }}
+
+      🔗 <a href="https://monitor.hocthongminh.ai/d/rYdddlPWk/node-exporter-full?var-node={{ or .Labels.instance "unknown" }}">View Dashboard</a>
+      {{- end }}
       {{- end }}
 
-      📦 <b>Container:</b>
-      <code>{{ index .Labels "container" | default "unknown" }}</code>
-
-      🏷️ <b>Type:</b>
-      <b>{{ index .Labels "log_level" | default "log" | upper }}</b>
-
-      📝 <b>Log Message:</b>
-      <pre>
-      {{- if .Annotations.description -}}
-      {{ .Annotations.description
-         | reReplaceAll "&" "&amp;"
-         | reReplaceAll "<" "&lt;"
-         | reReplaceAll ">" "&gt;"
-      }}
-      {{- else -}}
-      No log content (test alert)
-      {{- end -}}
-      </pre>
-
-      🔗 <a href="https://monitor.hocthongminh.ai/explore">View on Monitor</a>
-
+      {{- if gt (len .Alerts.Resolved) 0 }}
+      ✅ <b>RESOLVED</b>
+      {{- range .Alerts.Resolved }}
+      • {{ or .Labels.instance "unknown" }} - {{ .Labels.alertname }}
       {{- end }}
-      {{- else }}
-
-      <b>🚨 DOCKER LOG ALERT (TEST)</b>
-      This is a test alert from Grafana.
-
       {{- end }}
       {{ end }}
